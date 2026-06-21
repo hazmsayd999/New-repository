@@ -20,3 +20,4 @@ jobs:
         with:
           name: neuro-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          
