@@ -1,8 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 void main() { runApp(const NeuroApp()); }
 
@@ -19,68 +20,101 @@ class NeuroApp extends StatelessWidget {
   }
 }
 
-class ReportParser {
-  static int findQty(List<String> lines, List<String> keywords) {
-    for (int i = 0; i < lines.length; i++) {
-      final l = lines[i].toLowerCase();
-      if (keywords.any((k) => l.contains(k.toLowerCase()))) {
-        for (int j = i+1; j < lines.length && j < i+8; j++) {
-          final n = lines[j].trim().replaceAll(RegExp(r'[^\d]'), '');
-          if (n.isNotEmpty && n.length <= 4) {
-            final v = int.tryParse(n);
-            if (v != null && v > 0 && v < 9999) return v;
-          }
-        }
-      }
+class GeminiService {
+  static const _key = 'AIzaSyAb8RN6JvDa2uNbkASMGaKHkTTpY6wJzA6AfTKvaBIU8d8uBEHQ';
+  static const _url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+
+  static Future<Map<String,String>> analyzeReport(File image) async {
+    final bytes = await image.readAsBytes();
+    final b64 = base64Encode(bytes);
+
+    final prompt = '''هذه صورة Daily Financial Report. استخرج البيانات وأعطني رسالتين بالضبط:
+
+رسالة 1:
+Hot: [عدد Hot Drinks + Hot Chocolate]
+Add: [Extras Bev]
+Intenso: [L'aroma's Intenso]
+Ferddoccinoceix: [Freddoccinos & Ice Mixt]
+Frappes: [Frappes Fusion]
+Matcha Sweet: [Matcha Sweet]
+Coffee beans: [L'aroma's Coffee]
+Boba: 0
+Coke& water: [Fizzy Drinks]
+Fresh juices: [Fresh Juices]
+Smoothies&chillers: [Smoothies + Fruit Chillers]
+chooclet: [Chooclet]
+Muffins: [Muffins]
+M.O: 0
+Dessert: [Dessert]
+M.o: 0
+Box dessert: [Tart Psc + Mini Pastry]
+M.o: 0
+Clubs: [L'aroma's Clubs]
+M.o: 0
+Wrap: [Wrap]
+M.o: 0
+Baker: [Bakery]
+M.o: 0
+Pansarotti: 0
+Brow bea: [Integrale]
+M.o: 0
+Pizza&mini: [Pizza + Mini Pizza]
+m.o: 0
+Zee croque: [Croque]
+M.o: 0
+Panini: [Panini]
+M.o: 0
+Petite pain: [Petit Pain]
+M.o: 0
+Ciabat: [Ciabatta]
+M.o: 0
+Salads: [Salads]
+M.O: 0
+Total sales: [Cash in drawer Amount]
+mo: 0
+Total: 0
+Total percentage: 0
+
+رسالة 2:
+Hot drink: [Hot Drinks + Hot Chocolate]
+Cold Drin: [Freddoccinos + Frappes + Smoothies]
+Soft Drin: [Fizzy Drinks]
+Intenso: [Intenso]
+Dessert: [Dessert]
+Sandwich: [Ciabatta + Petit Pain + Panini + Croque + Integrale]
+Salad: [Salads]
+Bakery: [Bakery]
+Tart: [Tart Psc + Mini Pastry]
+Sales: [Cash in drawer Amount]
+
+أعطني فقط الرسالتين بدون أي كلام تاني. افصل بينهم بـ ---''';
+
+    final body = jsonEncode({
+      'contents': [{
+        'parts': [
+          {'text': prompt},
+          {'inline_data': {'mime_type': 'image/jpeg', 'data': b64}}
+        ]
+      }]
+    });
+
+    final res = await http.post(
+      Uri.parse('$_url?key=$_key'),
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+
+    if (res.statusCode == 200) {
+      final json = jsonDecode(res.body);
+      final text = json['candidates'][0]['content']['parts'][0]['text'] as String;
+      final parts = text.split('---');
+      return {
+        'msg1': parts[0].trim(),
+        'msg2': parts.length > 1 ? parts[1].trim() : '',
+      };
+    } else {
+      throw Exception('خطأ: ${res.statusCode} - ${res.body}');
     }
-    return 0;
-  }
-
-  static String findCash(List<String> lines) {
-    for (int i = 0; i < lines.length; i++) {
-      if (lines[i].toLowerCase().contains('cash in drawer')) {
-        for (int j = i+1; j < lines.length && j < i+6; j++) {
-          final l = lines[j].trim();
-          if (RegExp(r'\d+[\s,\.]\d+').hasMatch(l)) return l;
-        }
-      }
-    }
-    return '0';
-  }
-
-  static Map<String,String> parse(String raw) {
-    final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
-    final hot = findQty(lines, ['hot drinks']) + findQty(lines, ['hot chocolate']);
-    final add = findQty(lines, ['extras bev']);
-    final intenso = findQty(lines, ["l'aroma's intenso", 'intenso']);
-    final ferdd = findQty(lines, ['freddoccinos', 'ice mixt']);
-    final frappes = findQty(lines, ['frappes fusion']);
-    final matcha = findQty(lines, ['matcha sweet']);
-    final coffee = findQty(lines, ["l'aroma's coffee"]);
-    final coke = findQty(lines, ['fizzy drinks']);
-    final juice = findQty(lines, ['fresh juices']);
-    final smooth = findQty(lines, ['fruit chillers']) + findQty(lines, ['smoothies']);
-    final choc = findQty(lines, ['chooclet']);
-    final muffins = findQty(lines, ['muffins']);
-    final dessert = findQty(lines, ['dessert']);
-    final tart = findQty(lines, ['tart psc']) + findQty(lines, ['mini pastry']);
-    final clubs = findQty(lines, ["l'aroma's clubs"]);
-    final wrap = findQty(lines, ['wrap']);
-    final baker = findQty(lines, ['bakery']);
-    final integrale = findQty(lines, ['integrale']);
-    final pizza = findQty(lines, ['pizza']) + findQty(lines, ['mini pizza']);
-    final croque = findQty(lines, ['croque']);
-    final panini = findQty(lines, ['panini']);
-    final petit = findQty(lines, ['petit pain']);
-    final ciab = findQty(lines, ['ciabatta']);
-    final salads = findQty(lines, ['salads']);
-    final cash = findCash(lines);
-
-    final msg1 = 'Hot: $hot\nAdd: $add\nIntenso: $intenso\nFerddoccinoceix: $ferdd\nFrappes: $frappes\nMatcha Sweet: $matcha\nCoffee beans: $coffee\nBoba: 0\nCoke& water: $coke\nFresh juices: $juice\nSmoothies&chillers: $smooth\nchooclet: $choc\nMuffins: $muffins\nM.O: 0\nDessert: $dessert\nM.o: 0\nBox dessert: $tart\nM.o: 0\nClubs: $clubs\nM.o: 0\nWrap: $wrap\nM.o: 0\nBaker: $baker\nM.o: 0\nPansarotti: 0\nBrow bea: $integrale\nM.o: 0\nPizza&mini: $pizza\nm.o: 0\nZee croque: $croque\nM.o: 0\nPanini: $panini\nM.o: 0\nPetite pain: $petit\nM.o: 0\nCiabat: $ciab\nM.o: 0\nSalads: $salads\nM.O: 0\nTotal sales: $cash\nmo: 0\nTotal: 0\nTotal percentage: 0';
-
-    final msg2 = 'Hot drink: $hot\nCold Drin: ${ferdd+frappes+smooth}\nSoft Drin: $coke\nIntenso: $intenso\nDessert: $dessert\nSandwich: ${ciab+petit+panini+croque+integrale}\nSalad: $salads\nBakery: $baker\nTart: $tart\nSales: $cash';
-
-    return {'msg1': msg1, 'msg2': msg2};
   }
 }
 
@@ -93,22 +127,19 @@ class ReportPage extends StatefulWidget {
 class _ReportPageState extends State<ReportPage> {
   File? _image;
   bool _loading = false;
-  String? _msg1, _msg2, _error, _rawText;
+  String? _msg1, _msg2, _error;
   bool _copied1 = false, _copied2 = false;
 
   Future<void> _pick(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 100);
+    final picked = await ImagePicker().pickImage(source: source, imageQuality: 95);
     if (picked == null) return;
-    setState(() { _image = File(picked.path); _loading = true; _msg1 = null; _msg2 = null; _error = null; _rawText = null; });
+    setState(() { _image = File(picked.path); _loading = true; _msg1 = null; _msg2 = null; _error = null; });
     try {
-      final rec = TextRecognizer(script: TextRecognitionScript.latin);
-      final result = await rec.processImage(InputImage.fromFile(_image!));
-      await rec.close();
-      _rawText = result.text;
-      if (result.text.trim().isEmpty) { setState(() { _error = 'مش قادر يقرأ الصورة، جرب صورة أوضح'; _loading = false; }); return; }
-      final parsed = ReportParser.parse(result.text);
-      setState(() { _msg1 = parsed['msg1']; _msg2 = parsed['msg2']; _loading = false; });
-    } catch (e) { setState(() { _error = 'خطأ: $e'; _loading = false; }); }
+      final result = await GeminiService.analyzeReport(_image!);
+      setState(() { _msg1 = result['msg1']; _msg2 = result['msg2']; _loading = false; });
+    } catch (e) {
+      setState(() { _error = 'خطأ: $e'; _loading = false; });
+    }
   }
 
   Future<void> _copy(String text, bool first) async {
@@ -116,10 +147,6 @@ class _ReportPageState extends State<ReportPage> {
     setState(() { if (first) _copied1 = true; else _copied2 = true; });
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) setState(() { if (first) _copied1 = false; else _copied2 = false; });
-  }
-
-  Future<void> _copyRaw() async {
-    if (_rawText != null) await Clipboard.setData(ClipboardData(text: _rawText!));
   }
 
   @override
@@ -130,6 +157,7 @@ class _ReportPageState extends State<ReportPage> {
         const SizedBox(height: 20),
         const Text('NEURO', style: TextStyle(fontSize: 60, fontWeight: FontWeight.w900, color: Color(0xFFA78BFA), letterSpacing: 8)),
         const Text('Editor: Hazem Sayed', style: TextStyle(color: Color(0xFFA78BFA), fontSize: 12)),
+        const Text('Daily Report Generator — v1.3', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
         const SizedBox(height: 24),
         Container(
           width: double.infinity, constraints: const BoxConstraints(minHeight: 140, maxHeight: 260),
@@ -141,15 +169,13 @@ class _ReportPageState extends State<ReportPage> {
         _btn('📷 كاميرا', () => _pick(ImageSource.camera), true),
         const SizedBox(height: 10),
         _btn('🖼️ معرض الصور', () => _pick(ImageSource.gallery), false),
-        if (_loading) const Padding(padding: EdgeInsets.all(20), child: Column(children: [CircularProgressIndicator(color: Color(0xFFA78BFA)), SizedBox(height: 12), Text('⏳ بيقرأ الريبورت...', style: TextStyle(color: Color(0xFFA78BFA)))])),
+        if (_loading) const Padding(padding: EdgeInsets.all(20), child: Column(children: [CircularProgressIndicator(color: Color(0xFFA78BFA)), SizedBox(height: 12), Text('⏳ Gemini بيحلل الريبورت...', style: TextStyle(color: Color(0xFFA78BFA)))])),
         if (_error != null) Container(margin: const EdgeInsets.only(top: 16), padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.withOpacity(0.4))), child: Text(_error!, style: const TextStyle(color: Colors.redAccent))),
         if (_msg1 != null) ...[
           const SizedBox(height: 20),
           _card('✅ الرسالة الأولى', _msg1!, const Color(0xFFA78BFA), _copied1, () => _copy(_msg1!, true)),
           const SizedBox(height: 16),
           _card('📊 الرسالة التانية', _msg2!, const Color(0xFF22D3EE), _copied2, () => _copy(_msg2!, false)),
-          const SizedBox(height: 16),
-          GestureDetector(onTap: _copyRaw, child: Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.1))), child: const Text('📋 نسخ النص الخام (للتشخيص)', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF64748B), fontSize: 12)))),
         ],
         const SizedBox(height: 20),
       ]))),

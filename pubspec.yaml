@@ -9,9 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  google_mlkit_text_recognition: ^0.13.0
   image_picker: ^1.1.2
-  share_plus: ^10.0.0
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:
