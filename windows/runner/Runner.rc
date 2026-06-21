@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.neuro" "\0"
-            VALUE "FileDescription", "neuro_espitalia" "\0"
+            VALUE "FileDescription", "new_repository" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "neuro_espitalia" "\0"
+            VALUE "InternalName", "new_repository" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.neuro. All rights reserved." "\0"
-            VALUE "OriginalFilename", "neuro_espitalia.exe" "\0"
-            VALUE "ProductName", "neuro_espitalia" "\0"
+            VALUE "OriginalFilename", "new_repository.exe" "\0"
+            VALUE "ProductName", "new_repository" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
